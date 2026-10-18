@@ -1,0 +1,204 @@
+// Hubio 2026 Enterprise Relational Database Schema
+// Optimized for PostgreSQL 16 & Multi-Tenant Performance
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProjectCategory {
+  mobile_web
+  seo_geo
+  performance
+  security
+  cloud
+}
+
+enum ProjectStatus {
+  planning
+  in_progress
+  client_review
+  completed
+}
+
+enum DocumentType {
+  contract
+  specification
+  invoice
+  nda
+  deliverable
+}
+
+enum MediaType {
+  image
+  video
+  figma
+  document
+}
+
+enum RevisionStatus {
+  pending
+  in_progress
+  resolved
+}
+
+enum OrderPaymentStatus {
+  paid
+  pending
+  refunded
+}
+
+enum OrderFulfillmentStatus {
+  queued
+  in_progress
+  delivered
+}
+
+model Company {
+  id          String    @id @default(cuid())
+  name        String
+  taxNumber   String?   @unique
+  taxOffice   String?
+  sector      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  users       User[]
+  projects    Project[]
+  orders      OneOffOrder[]
+
+  @@map("companies")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  companyId    String?
+  email        String    @unique
+  passwordHash String
+  fullName     String
+  role         String    @default("client_admin")
+  avatarUrl    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  company      Company?  @relation(fields: [companyId], references: [id])
+
+  @@map("users")
+}
+
+model Project {
+  id                   String           @id @default(cuid())
+  clientId             String
+  title                String
+  category             ProjectCategory  @default(mobile_web)
+  status               ProjectStatus    @default(planning)
+  progressPercentage   Int              @default(0)
+  totalBudgetFormatted String
+  spentBudgetFormatted String
+  startDate            DateTime
+  targetLaunchDate     DateTime
+  liveUrl              String?
+  repoUrl              String?
+  techStack            String[]
+  description          String
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  company              Company          @relation(fields: [clientId], references: [id])
+  documents            Document[]
+  mediaAssets          MediaAsset[]
+  revisions            MilestoneRevision[]
+
+  @@map("projects")
+}
+
+model Document {
+  id                String        @id @default(cuid())
+  projectId         String
+  title             String
+  type              DocumentType
+  fileUrl           String
+  fileSizeBytes     Int
+  fileSizeFormatted String
+  mimeType          String
+  version           String        @default("v1.0")
+  isSigned          Boolean       @default(false)
+  signedAt          DateTime?
+  signedBy          String?
+  downloadCount     Int           @default(0)
+  createdAt         DateTime      @default(now())
+
+  project           Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
+}
+
+model MediaAsset {
+  id              String     @id @default(cuid())
+  projectId       String
+  title           String
+  mediaType       MediaType
+  url             String
+  thumbnailUrl    String
+  durationSeconds Int?
+  resolution      String?
+  tags            String[]
+  uploaderName    String
+  fileSizeBytes   Int
+  createdAt       DateTime   @default(now())
+
+  project         Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("media_assets")
+}
+
+model MilestoneRevision {
+  id               String         @id @default(cuid())
+  projectId        String
+  milestoneId      String
+  title            String
+  tag              String
+  notes            String
+  attachedMediaUrl String?
+  status           RevisionStatus @default(pending)
+  requestedAt      DateTime       @default(now())
+  resolvedAt       DateTime?
+
+  project          Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("milestone_revisions")
+}
+
+model OneOffOrder {
+  id             String                 @id @default(cuid())
+  clientId       String
+  serviceId      String
+  serviceTitle   String
+  category       String
+  priceFormatted String
+  invoiceNumber  String                 @unique
+  paymentStatus  OrderPaymentStatus     @default(paid)
+  orderStatus    OrderFulfillmentStatus @default(queued)
+  orderedAt      DateTime               @default(now())
+  deliveredAt    DateTime?
+
+  company        Company                @relation(fields: [clientId], references: [id])
+
+  @@map("one_off_orders")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  entityType  String
+  entityId    String
+  action      String
+  performedBy String
+  details     String
+  timestamp   DateTime @default(now())
+
+  @@map("audit_logs")
+}

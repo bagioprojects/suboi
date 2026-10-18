@@ -1,0 +1,28 @@
+# Hubio 2026 Enterprise Backend Dockerfile
+# Stage 1: Build
+FROM node:22-alpine AS builder
+WORKDIR /app
+
+COPY package*.json ./
+COPY tsconfig.json ./
+COPY packages/ packages/
+COPY server/ server/
+
+RUN npm ci --legacy-peer-deps
+RUN cd server && npm install && npm run build
+
+# Stage 2: Production Runner
+FROM node:22-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=5000
+
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/server/package*.json ./server/
+COPY --from=builder /app/server/dist ./server/dist
+COPY --from=builder /app/packages/shared ./packages/shared
+
+RUN cd server && npm install --omit=dev
+
+EXPOSE 5000
+CMD ["node", "server/dist/server/src/server.js"]
